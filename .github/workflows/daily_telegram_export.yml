@@ -1,0 +1,52 @@
+name: Daily Telegram Export
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:00 KST = 18:00 UTC
+    - cron: "0 18 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-telegram-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Export Telegram messages
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          REPORT_CHAT_ID: ${{ secrets.REPORT_CHAT_ID }}
+          GROUP_CHAT_ID: ${{ secrets.GROUP_CHAT_ID }}
+          TIMEZONE: Asia/Seoul
+          WINDOW_HOURS: 24
+        run: python main.py
+
+      - name: Commit updated state
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          if ! git diff --quiet state.json; then
+            git add state.json
+            git commit -m "Update Telegram export state"
+            git push
+          else
+            echo "No state changes to commit."
+          fi
